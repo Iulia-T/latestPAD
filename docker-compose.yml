@@ -1,0 +1,153 @@
+version: '3'
+
+services:
+  api:
+    build: .
+    # image: iulia539/pad-extra-lab:latest
+    volumes:
+      - .:/usr/app/
+      - /usr/app/node_modules
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo-primary
+      - mongo-secondary
+      - mongo-arbiter
+      - postgresdb
+    environment:
+      - MONGODB_URI=mongodb://mongo-primary:27017/posts
+      - POSTGRES_URI=postgres://postgres:admin@postgresdb:5432/users
+      - REDIS_URI=redis://redis:6379
+
+  mongo-primary:
+    image: mongo
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo_primary_data:/data/db
+
+  mongo-secondary:
+    image: mongo
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo_secondary_data:/data/db
+    depends_on:
+      - mongo-primary
+
+  mongo-arbiter:
+    image: mongo
+    command: mongod --replSet rs0 --bind_ip_all
+    depends_on:
+      - mongo-primary
+
+  mongo-setup:
+    image: mongo
+    depends_on:
+      - mongo-primary
+      - mongo-secondary
+      - mongo-arbiter
+    command: >
+      /bin/bash -c "
+        sleep 10;
+        mongosh --host mongo-primary:27017 <<EOF
+        rs.initiate({
+          _id: 'rs0',
+          members: [
+            { _id: 0, host: 'mongo-primary:27017' },
+            { _id: 1, host: 'mongo-secondary:27017' },
+            { _id: 2, host: 'mongo-arbiter:27017', arbiterOnly: true }
+          ]
+        })
+        EOF
+      "
+
+  postgresdb:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis-node-1:
+    image: redis:latest
+    ports:
+      - 7777:7777
+    hostname: redis-node-1
+    container_name: redis-node-1
+    volumes:
+      - ./redis/7777:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-node-2:
+    image: redis:latest
+    ports:
+      - 7001:7001
+    hostname: redis-node-2
+    container_name: redis-node-2
+    volumes:
+      - ./redis/7001:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-node-3:
+    image: redis:latest
+    ports:
+      - 7002:7002
+    hostname: redis-node-3
+    container_name: redis-node-3
+    volumes:
+      - ./redis/7002:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-node-4:
+    image: redis:latest
+    ports:
+      - 7003:7003
+    hostname: redis-node-4
+    container_name: redis-node-4
+    volumes:
+      - ./redis/7003:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-node-5:
+    image: redis:latest
+    ports:
+      - 7004:7004
+    hostname: redis-node-5
+    container_name: redis-node-5
+    volumes:
+      - ./redis/7004:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-node-6:
+    image: redis:latest
+    ports:
+      - 7005:7005
+    hostname: redis-node-6
+    container_name: redis-node-6
+    volumes:
+      - ./redis/7005:/redis
+    command: redis-server /redis/redis.conf
+
+  redis-cluster-creator:
+    image: redis:latest
+    ports:
+      - 6999:6999
+    command: redis-cli -p 7000 --cluster create redis-node-1:7777 redis-node-2:7001 redis-node-3:7002 redis-node-4:7003 redis-node-5:7004 redis-node-6:7005 --cluster-replicas 1 --cluster-yes
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    expose:
+      - 6999
+
+volumes:
+  mongo_primary_data:
+  mongo_secondary_data:
+  mongo_arbiter_data:
+  postgres_data:
